@@ -19,6 +19,8 @@ export function SpiderPage() {
  const [phase, setPhase] = useState(0);
  const [scanned, setScanned] = useState(0);
  const [selected, setSelected] = useState<Chunk[]>([]);
+ const [transferring, setTransferring] = useState<string | null>(null);
+ const [delivered, setDelivered] = useState(0);
  const [answer, setAnswer] = useState('');
  const [reasoning, setReasoning] = useState('');
  const [error, setError] = useState('');
@@ -32,6 +34,8 @@ export function SpiderPage() {
  const [hardware, setHardware] = useState<{ cpu?: { utilization: number | null }; gpus?: { utilization: number | null; used: number | null }[] } | null>(null);
  const [tokens, setTokens] = useState<number | null>(null);
  const [slow, setSlow] = useState(true);
+ const [scanPaused, setScanPaused] = useState(false);
+ const scanControl = useRef({ paused: false, next: false });
  const operation = useRef<AbortController | null>(null);
  const mounted = useRef(true);
  useEffect(() => {
@@ -48,7 +52,7 @@ export function SpiderPage() {
  }, []);
  function install(text: string, name: string) {
   const next = splitDocument(text);
-  setInspected(null); setActivity([]); setPulse(0); setChunks(next); setFilename(name); setSelected([]); setScanned(0); setPhase(0); setAnswer(''); setReasoning(''); setTokens(null); setError('');
+  setTransferring(null); setDelivered(0); setInspected(null); setActivity([]); setPulse(0); setChunks(next); setFilename(name); setSelected([]); setScanned(0); setPhase(0); setAnswer(''); setReasoning(''); setTokens(null); setError('');
   setStatus(`${next.length} fragmentos preparados. Haz una pregunta sobre el documento.`);
  }
  async function upload(event: React.ChangeEvent<HTMLInputElement>) {
@@ -65,7 +69,8 @@ export function SpiderPage() {
   event.preventDefault();
   if (busy || reading || !question.trim()) return;
   const abort = new AbortController(); operation.current = abort;
-  setPulse(0); setActivity([]); setBusy(true); setError(''); setAnswer(''); setReasoning(''); setTokens(null); setSelected([]); setScanned(0); setPhase(1);
+  scanControl.current = { paused: false, next: false }; setScanPaused(false);
+  setTransferring(null); setDelivered(0); setPulse(0); setActivity([]); setBusy(true); setError(''); setAnswer(''); setReasoning(''); setTokens(null); setSelected([]); setScanned(0); setPhase(1);
   const ranked = rankDocument(chunks, question);
   setChunks(ranked.map(c => ({ ...c, score: 0, terms: [] })));
   try {
@@ -73,12 +78,25 @@ export function SpiderPage() {
     if (abort.signal.aborted) throw new Error('Consulta detenida.');
     setStatus(`${ranked[i].id} · similitud ${ranked[i].score.toFixed(3)} · ${ranked[i].terms.length ? 'coincide: ' + ranked[i].terms.join(', ') : 'sin palabras compartidas'}`);
     setChunks(previous => previous.map((c, index) => index === i ? ranked[i] : c)); setScanned(i + 1);
-    await pause(slow ? Math.min(650, Math.max(6, 12000 / ranked.length)) : 0, abort.signal);
+    // Tiempo de exposición para leer el fragmento; la comparación ya se calculó arriba.
+    let elapsed = 0;
+    while (slow && (elapsed < 1600 || scanControl.current.paused)) {
+     await pause(100, abort.signal);
+     if (scanControl.current.next) { scanControl.current.next = false; break; }
+     if (!scanControl.current.paused) elapsed += 100;
+    }
+    if (!slow) await pause(0, abort.signal);
    }
    const context = selectContext(ranked); setSelected(context); setPhase(2);
    if (chunks.length && !context.length) { setStatus('No hay coincidencias. Prueba palabras que aparezcan en el documento. No se envió una consulta al modelo.'); return; }
    setStatus(`Seleccionados ${context.length} fragmentos. Solo este contexto se enviará al modelo.`);
-   await pause(slow ? 1300 : 0, abort.signal);
+   for (let i = 0; i < context.length; i++) {
+    setTransferring(context[i].id);
+    setStatus(`Preparando contexto ${i + 1}/${context.length}: ${context[i].id} viaja hacia el modelo. Animación explicativa del envío.`);
+    await pause(slow ? 1800 : 400, abort.signal);
+    setDelivered(i + 1);
+   }
+   setTransferring(null);
    setStatus('Cargando el modelo local…');
    const connected = await fetch('/api/model', { method: 'POST', signal: abort.signal });
    const info = await connected.json(); if (!connected.ok) throw new Error(info.error);
@@ -112,11 +130,12 @@ export function SpiderPage() {
    if (!doneEvent) throw new Error('La conexión terminó antes de completar la respuesta.');
    setStatus(limited ? 'Se alcanzó el límite de salida. La respuesta puede estar incompleta.' : 'Respuesta terminada. Puedes revisar el contexto enviado y sus coincidencias.');
   } catch (e) { if (mounted.current) { setError(abort.signal.aborted ? 'Consulta detenida.' : e instanceof Error ? e.message : 'No se pudo completar la consulta.'); setStatus('Puedes volver a intentarlo.'); } }
-  finally { if (mounted.current) setBusy(false); operation.current = null; }
+  finally { if (mounted.current) { setBusy(false); setScanPaused(false); setTransferring(null); } scanControl.current = { paused: false, next: false }; operation.current = null; }
  }
 
  const [inspected, setInspected] = useState<string | null>(null);
  const ids = new Set(selected.map(c => c.id));
+ const comparing = phase === 1 ? chunks[scanned - 1] : undefined;
  const detail = chunks.find(c => c.id === inspected);
  const value = (n: number | null | undefined, unit: string) => n == null ? '—' : `${n.toLocaleString('es-CO')} ${unit}`;
  return <main className={s.page}>
@@ -124,20 +143,29 @@ export function SpiderPage() {
   <div className={s.workspace}>
    <section className={s.visual}>
     <div className={s.topline}><span><i /> {busy ? 'EN ACTIVIDAD' : 'EN ESPERA'}</span><span>{chunks.length} FRAGMENTOS · {selected.length} SELECCIONADOS</span></div>
-    <SpiderScene chunks={chunks} selected={selected} scanned={scanned} phase={phase} busy={busy} pulse={pulse} onSelect={setInspected} />
-    <div className={s.visualFooter}><div className={s.steps}>{steps.map((step, i) => <span key={step} className={phase === i ? s.current : ''}>0{i + 1} {step}</span>)}</div><p role="status">{status}</p><div className={s.pipeline} aria-label="Esquema explicativo del modelo">
+    <SpiderScene chunks={chunks} selected={selected} scanned={scanned} phase={phase} busy={busy} pulse={pulse} transferring={transferring} delivered={delivered} transferDuration={slow ? 1800 : 400} onSelect={setInspected} />
+    <div className={s.visualFooter}><div className={s.steps}>{steps.map((step, i) => <span key={step} className={phase === i ? s.current : ''}>0{i + 1} {step}</span>)}</div><p role="status">{status}</p>{comparing && <div className={s.scanProgress}><span>Explorando {comparing.id} · {scanned}/{chunks.length}</span><progress aria-label="Avance por el documento" max={chunks.length} value={scanned} /></div>}
+    {phase >= 2 && selected.length > 0 && <div className={s.contextChips}><span>{phase === 2 ? `Preparando contexto: ${delivered}/${selected.length}` : 'Contexto enviado:'}</span>{selected.map(c => <button key={c.id} onClick={() => setInspected(c.id)}>{c.id} · {c.score.toFixed(3)}</button>)}</div>}
+    <details className={s.modelDiagram}><summary>Cómo procesa el modelo</summary><div className={s.pipeline} aria-label="Esquema explicativo del modelo">
      <span className={phase >= 2 && selected.length ? s.flow : ''}>Contexto<small>{selected.length} fragmentos</small></span>
      <span className={phase === 3 ? s.flow : ''}>Embeddings<small>Texto a vectores</small></span>
      <span className={phase === 3 ? s.flow : ''}>Atención<small>Q · K · V</small></span>
      <span className={phase === 3 ? s.flow : ''}>MLP<small>Transformación</small></span>
      <span key={pulse} className={pulse ? `${s.output} ${s.streamPulse}` : ''}>Salida<small>{pulse} eventos recibidos</small></span>
-    </div><div className={s.pipelineNote}>Capas: esquema ilustrativo. Los pulsos de salida siguen el texto recibido.</div><div className={s.legend}><span>● Conexiones</span><span>● Contexto seleccionado</span><span>● Texto recibido</span></div></div>
+    </div><div className={s.pipelineNote}>Capas: esquema ilustrativo. Los pulsos de salida siguen el texto recibido.</div></details><div className={s.legend}><span>● Por explorar</span><span>● Seleccionado</span><span>● Comparando</span></div></div>
     <div className={s.sensors}><span>CPU <b>{value(hardware?.cpu?.utilization, '%')}</b></span><span>GPU <b>{value(hardware?.gpus?.[0]?.utilization, '%')}</b></span><span>VRAM <b>{value(hardware?.gpus?.[0]?.used, 'MiB')}</b></span><span>Uso total del equipo</span></div>
    </section>
    <aside className={s.sidebar}>
     <div className={s.sidebarTitle}><span>CONVERSACIÓN</span><small>{model || 'DeepSeek · local'}</small></div>
     <section className={s.documents}><h2>Documento</h2><label className={s.upload}>{reading ? 'Leyendo documento…' : '+ Añadir archivo'}<input type="file" accept={fileTypes} disabled={busy || reading} onChange={upload} /></label><button className={s.example} disabled={busy || reading} onClick={() => install(example, 'Ejemplo: CPU y GPU')}>Usar ejemplo</button><p className={s.filename}>{filename}</p><small>PDF, DOCX y texto · hasta 20 MiB<br />PDF: hasta 200 páginas con texto. Sin OCR.</small></section>
-    <section className={s.conversation}><div className={s.answer}>{answer || <div className={s.welcome}><span>¿Qué quieres explorar?</span><p>Haz una pregunta o añade un documento. Verás crecer una red de fragmentos y palabras, cómo se busca el contexto y cómo llega la respuesta.</p></div>}</div>{reasoning && <details><summary>Razonamiento emitido por el modelo</summary><p className={s.thought}>{reasoning}</p></details>}{tokens !== null && <small>{tokens} tokens de salida reportados</small>}{error && <p role="alert" className={s.error}>{error}</p>}</section>
+    {comparing && <section className={s.scanCard} aria-label="Fragmento en comparación">
+     <div className={s.scanHeading}><strong>{comparing.id} · {scanned} de {chunks.length}</strong><span>Similitud {comparing.score.toFixed(3)}</span></div>
+     <progress aria-label="Progreso de búsqueda" max={chunks.length} value={scanned} />
+     <p>{comparing.text.slice(0, 260)}{comparing.text.length > 260 ? '…' : ''}</p>
+     <div className={s.matches}>{comparing.terms.length ? comparing.terms.map(term => <span key={term}>{term}</span>) : <span>Sin palabras compartidas</span>}</div>
+     {busy && slow && <div className={s.scanActions}><button onClick={() => { scanControl.current.paused = !scanControl.current.paused; setScanPaused(scanControl.current.paused); }}>{scanPaused ? 'Continuar búsqueda' : 'Pausar búsqueda'}</button><button disabled={!scanPaused} onClick={() => { scanControl.current.next = true; }}>Siguiente fragmento</button><small>{scanPaused ? 'Búsqueda en pausa' : 'Un fragmento cada 1,6 s'}</small></div>}
+    </section>}
+    <section className={s.conversation} hidden={!!comparing && busy}><div className={s.answer}>{answer || <div className={s.welcome}><span>¿Qué quieres explorar?</span><p>Haz una pregunta o añade un documento. Verás crecer una red de fragmentos y palabras, cómo se busca el contexto y cómo llega la respuesta.</p></div>}</div>{reasoning && <details><summary>Razonamiento emitido por el modelo</summary><p className={s.thought}>{reasoning}</p></details>}{tokens !== null && <small>{tokens} tokens de salida reportados</small>}{error && <p role="alert" className={s.error}>{error}</p>}</section>
     <form className={s.form} onSubmit={run}><label htmlFor="document-question">Tu pregunta</label><textarea id="document-question" maxLength={1000} rows={3} value={question} disabled={busy} onChange={e => setQuestion(e.target.value)} placeholder="Pregunta al modelo…" /><div className={s.actions}><label className={s.check}><input type="checkbox" checked={slow} disabled={busy} onChange={e => setSlow(e.target.checked)} /> Paso a paso</label>{busy ? <button type="button" onClick={() => operation.current?.abort()}>Detener</button> : <button type="submit" disabled={reading || !question.trim()}>Preguntar ↗</button>}</div></form>
     <section className={s.activity}><h2>Recorrido</h2>{activity.map((message, index) => <p key={`${index}-${message}`}>{message}</p>)}</section>
     <details className={s.context} open={!!detail}><summary>Contexto · {selected.length} seleccionados</summary>{detail && <article><strong>{detail.id} · fragmento inspeccionado</strong><p>{detail.text}</p><button onClick={() => setInspected(null)}>Cerrar fragmento</button></article>}{chunks.map((chunk, i) => <details key={chunk.id} className={ids.has(chunk.id) ? s.selected : ''}><summary>{chunk.id} · {ids.has(chunk.id) ? 'Enviado al modelo' : scanned > i ? `Afinidad ${chunk.score.toFixed(3)}` : 'Pendiente'}</summary><p>{chunk.text}</p><small>Coincidencias: {chunk.terms.join(', ') || 'ninguna'}</small></details>)}{!chunks.length && <p>Sin documento: la respuesta usa el conocimiento del modelo.</p>}</details>
