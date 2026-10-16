@@ -287,7 +287,7 @@ export function genGptModelLayout(shape: IModelShape, gptGpuModel: IGptModelLink
         cx: vocabSize, cz: 1, cy: C, // src has shape [vocabSize, C]
         access: { src: gptGpuModel?.vocabEmbed.weight, x: [0, 1, 0], y: [1, 0, 0], scale: 10 },
         dimX: DimStyle.n_vocab, dimY: DimStyle.C,
-        name: 'Embed de Tokens',
+        name: 'Vectores de tokens',
     });
 
     let posEmbedObj = mk({
@@ -296,7 +296,7 @@ export function genGptModelLayout(shape: IModelShape, gptGpuModel: IGptModelLink
         cx: T, cz: 1, cy: C,
         access: { src: gptGpuModel?.posEmbed.weight, x: [0, 1, 0], y: [1, 0, 0], scale: 10 },
         dimX: DimStyle.T, dimY: DimStyle.C,
-        name: 'Embed de Posición',
+        name: 'Vectores de posición',
     });
 
     let residual0 = mk({
@@ -306,7 +306,7 @@ export function genGptModelLayout(shape: IModelShape, gptGpuModel: IGptModelLink
         access: { src: gptGpuModel?.add.output, x: [0, 1, 0], y: [1, 0, T], scale: 10 },
         deps: { add: [[tokEmbedObj, 'iy'], [posEmbedObj, 'xy'], [idxObj, 'x0']], special: BlKDepSpecial.InputEmbed }, // the i comes from the idxObj lookup
         dimX: DimStyle.T, dimY: DimStyle.C,
-        name: 'Embed de Entrada',
+        name: 'Vectores de entrada',
     });
     cubes.push(idxObj, tokEmbedObj, posEmbedObj, residual0);
 
@@ -357,7 +357,7 @@ export function genGptModelLayout(shape: IModelShape, gptGpuModel: IGptModelLink
             access: { src: target?.output, x: [0, 1, 0], y: [1, 0, T], scale: 1.0 },
             deps: { add: [[src, 'xy'], [lnAgg1, 'xi'], [lnAgg2, 'xi'], [lnSigma, '0y'], [lnMu, '0y']], special: BlKDepSpecial.LayerNorm }, // lnSigma is really mul rather than add
             dimX: DimStyle.T, dimY: DimStyle.C,
-            name: 'Layer Norm',
+            name: 'Normalización de capa',
         });
         let lnCubes = [lnAgg1, lnAgg2, lnSigma, lnMu, lnResid];
         return { lnAgg1, lnAgg2, lnResid, lnSigma, lnMu, cubes: lnCubes };
@@ -792,7 +792,7 @@ export function genGptModelLayout(shape: IModelShape, gptGpuModel: IGptModelLink
             xR: lnLeftX, zM: 0,
             access: { src: gptGpuModel?.lm_head.weight, x: [0, 1, 0], y: [1, 0, 0], scale: 5.0 },
             dimX: DimStyle.n_vocab, dimY: DimStyle.C,
-            name: 'Pesos LM Head',
+            name: 'Pesos de salida',
         });
 
         y += C * cell + margin;
@@ -846,7 +846,7 @@ export function genGptModelLayout(shape: IModelShape, gptGpuModel: IGptModelLink
             xR: leftX2, zM: 0,
             access: { src: gptGpuModel?.lm_head.weight, x: [1, 0, 0], y: [0, 1, 0], scale: 5.0 },
             dimX: DimStyle.C, dimY: DimStyle.n_vocab,
-            name: 'Pesos LM Head',
+            name: 'Pesos de salida',
         });
 
 
@@ -938,4 +938,5 @@ export function genGptModelLayout(shape: IModelShape, gptGpuModel: IGptModelLink
         },
     };
 }
+
 

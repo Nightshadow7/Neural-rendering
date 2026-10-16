@@ -16,7 +16,7 @@ import { constructModel, createGpuModelForWasm } from './GptModelWasm';
 import { MovementAction } from './components/MovementControls';
 import { useScreenLayout } from '@/src/utils/layout';
 import { jumpPhase } from './Commentary';
-import { WelcomePopup, InfoButton } from './WelcomePopup';
+import { Phase } from './walkthrough/Walkthrough';
 import { KeyboardManagerContext, KeyboardOrder, useGlobalKeyboard } from '@/src/utils/keyboard';
 import { Resizer } from '../utils/Resizer';
 import { ModelSelectorToolbar } from './components/ModelSelectorToolbar';
@@ -32,13 +32,22 @@ async function fetchTensorData(url: string): Promise<ITensorSet> {
     return data;
 }
 
-export function LayerView() {
+export function LayerView({ activePhase }: { activePhase?: Phase }) {
     let [canvasEl, setCanvasEl] = useState<HTMLCanvasElement | null>(null);
     let [dataAndModel, setDataAndModel] = useState<IDataAndModel | null>(null);
     let [canvasRender, setCanvasRender] = useState<CanvasRender | null>(null);
     let [fontAtlasData, setFontAtlasData] = useState<IFontAtlasData | null>(null);
     let layout = useScreenLayout();
     let keyboardManager = useContext(KeyboardManagerContext);
+    const [loadError, setLoadError] = useState('');
+    useEffect(() => {
+        if (!canvasRender || activePhase === undefined) return;
+        const wt = canvasRender.progState.walkthrough;
+        wt.phase = activePhase;
+        wt.time = 0;
+        wt.running = true;
+        canvasRender.markDirty();
+    }, [activePhase, canvasRender]);
 
     function handleCopyCamera(ev: React.MouseEvent) {
         let camera = canvasRender?.progState.camera;
@@ -59,6 +68,7 @@ export function LayerView() {
     }
 
     useGlobalKeyboard(KeyboardOrder.MainPage, (ev: KeyboardEvent) => {
+        if (ev.target instanceof HTMLElement && ev.target.closest('input, textarea, select, button, [contenteditable="true"]')) return;
         if (!canvasRender?.progState) {
             return;
         }
@@ -128,15 +138,15 @@ export function LayerView() {
     useEffect(() => {
         let stale = false;
         async function getData() {
-            let dataP = fetchTensorData('gpt-nano-sort-t0-partials.json');
-            let modelP = fetchTensorData('gpt-nano-sort-model.json');
+            let dataP = fetchTensorData('/gpt-nano-sort-t0-partials.json');
+            let modelP = fetchTensorData('/gpt-nano-sort-model.json');
             let nativeBindingsP = loadNativeBindings();
             let [data, model, native] = await Promise.all([dataP, modelP, nativeBindingsP]);
             if (stale) return;
             setDataAndModel({ data, model, native });
         }
 
-        getData();
+        getData().catch(() => { if (!stale) setLoadError('No se pudieron cargar los datos del modelo 3D. Recarga la página.'); });
 
         return () => { stale = true; };
     }, []);
@@ -149,7 +159,7 @@ export function LayerView() {
             setFontAtlasData(data);
         }
 
-        getData();
+        getData().catch(() => { if (!stale) setLoadError('No se pudieron cargar las fuentes de la escena 3D.'); });
 
         return () => { stale = true; };
     }, []);
@@ -206,12 +216,12 @@ export function LayerView() {
             <CanvasEventSurface>
                 {/* <MovementControls /> */}
             </CanvasEventSurface>
-            <WelcomePopup />
             <ModelSelectorToolbar />
         </ProgramStateContext.Provider>}
     </div>;
 
     return <div className={s.view}>
+        {loadError && <div role="alert" className="absolute top-0 left-0 z-50 bg-red-100 p-4">{loadError}</div>}
         <Resizer id={"llm-sidebar"} className={"flex-1"} vertical={!layout.isDesktop} defaultAmt={0.4}>
             {layout.isDesktop && sidebar}
             {mainView}

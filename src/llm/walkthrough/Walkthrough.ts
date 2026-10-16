@@ -94,8 +94,8 @@ export function initWalkthrough() {
             groupId: PhaseGroup.Detailed_Input,
             title: 'Recorrido detallado',
             phases: [
-                { id: Phase.Input_Detail_Embedding, title: 'Embedding' },
-                { id: Phase.Input_Detail_LayerNorm, title: 'Layer Norm' },
+                { id: Phase.Input_Detail_Embedding, title: 'Representación vectorial' },
+                { id: Phase.Input_Detail_LayerNorm, title: 'Normalización de capa' },
                 { id: Phase.Input_Detail_SelfAttention, title: 'Autoatención' },
                 { id: Phase.Input_Detail_Projection, title: 'Proyección' },
                 { id: Phase.Input_Detail_Mlp, title: 'MLP' },
@@ -414,3 +414,4 @@ export function walkthroughDetailed(args: IWalkthroughArgs) {
 
     }
 }
+

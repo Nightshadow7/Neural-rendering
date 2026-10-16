@@ -20,7 +20,7 @@ export function drawBlockLabels(state: IRenderState, layout: IGptModelLayout) {
         let color = baseColor.mul(layout.embedLabel.visible);
         let tl = new Vec3(layout.tokEmbedObj.x - layout.margin * 2, layout.tokEmbedObj.y, 0);
         let br = new Vec3(layout.tokEmbedObj.x - layout.margin * 2, layout.tokEmbedObj.y + layout.tokEmbedObj.dy, 0);
-        drawSectionLabel(state, "Embedding", tl, br, { color, fontSize: 6, pad: 4 });
+        drawSectionLabel(state, "Vectores de entrada", tl, br, { color, fontSize: 6, pad: 4 });
     }
 
     let transformerIdx = 0;
@@ -150,3 +150,4 @@ function drawSectionLabel(state: IRenderState, text: string, tl: Vec3, br: Vec3,
     addLine(state.lineRender, 1.0, lineColor, p1.mulAdd(inward, -pad), p1, undefined);
 
 }
+

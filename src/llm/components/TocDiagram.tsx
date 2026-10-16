@@ -109,7 +109,7 @@ export const TocDiagram: React.FC<{
                 { type: ElType.Gap, height: exitGap, gapType: 'exit', arrow: true },
                 { type: ElType.Cell, height: 1, label: 'norm. capa', width: widthStd, color: colors.ln, id: 'ln2' },
                 { type: ElType.Gap, height: smallGap, arrow: true },
-                { type: ElType.Cell, height: 2, label: ['feed', 'forward'], width: widthFeedForward, color: colors.feedForward, id: 'feedForward' },
+                { type: ElType.Cell, height: 2, label: ['red', 'densa'], width: widthFeedForward, color: colors.feedForward, id: 'feedForward' },
                 { type: ElType.Gap, height: plusGap, gapType: 'add' },
             ] },
             { type: ElType.Gap, height: smallGap, arrow: true },
@@ -135,11 +135,11 @@ export const TocDiagram: React.FC<{
     makeEntry(Phase.Intro_Prelim, 'Conceptos preliminares', []);
 
     entryGroups.push({ groupName: 'Componentes', entries: [] });
-    makeEntry(Phase.Input_Detail_Embedding, 'Embedding', ['tokEmbed', 'posEmbed'], true);
-    makeEntry(Phase.Input_Detail_LayerNorm, 'Layer Norm', ['ln1', 'ln2', 'lnf']);
+    makeEntry(Phase.Input_Detail_Embedding, 'Representación vectorial', ['tokEmbed', 'posEmbed'], true);
+    makeEntry(Phase.Input_Detail_LayerNorm, 'Normalización de capa', ['ln1', 'ln2', 'lnf']);
     makeEntry(Phase.Input_Detail_SelfAttention, 'Autoatención', ['selfAttend']);
     makeEntry(Phase.Input_Detail_Projection, 'Proyección', ['selfAttend']);
-    makeEntry(Phase.Input_Detail_Mlp, 'MLP (Feed-Forward)', ['feedForward']);
+    makeEntry(Phase.Input_Detail_Mlp, 'Red densa (MLP)', ['feedForward']);
     makeEntry(Phase.Input_Detail_Transformer, 'Bloque Transformer', ['transformer']);
     makeEntry(Phase.Input_Detail_Softmax, 'Softmax', ['softmaxOut']);
     makeEntry(Phase.Input_Detail_Output, 'Salida', ['lnf', 'linear', 'softmaxOut'], true);
@@ -352,8 +352,8 @@ export const TocDiagram: React.FC<{
         let ctx = canvas.getContext('2d')!;
         ctx.font = '16px Merriweather';
 
-        let textSegs = ['How', ' to', ' predict'];
-        let ids = [2437, 284, 4331];
+        let textSegs = ['Cómo', ' se', ' predice'];
+        let ids = [1, 2, 3];
 
         let colors = [
             'rgba(107,64,216,.3)',
@@ -371,9 +371,9 @@ export const TocDiagram: React.FC<{
             offsets.push(offsets[offsets.length - 1] + widths[widths.length - 1]);
         }
 
-        let egTextSegs = [' text', ' tokens', ' words'];
+        let egTextSegs = [' texto', ' tokens', ' palabras'];
         let egPct = [0.8, 0.5, 0.3];
-        let egIds = [2420, 16326, 2456];
+        let egIds = [4, 5, 6];
         let egWidths = egTextSegs.map(seg => ctx.measureText(seg).width + 1);
 
         let egColor = colors[widths.length];
@@ -645,3 +645,5 @@ export const MenuEntry: React.FC<{
         {title}
     </div>;
 });
+
+
