@@ -3,19 +3,25 @@
   "private": true,
   "license": "MIT",
   "scripts": {
-    "dev": "next dev --hostname 127.0.0.1 -p 3002",
+    "dev": "node scripts/dev.mjs",
     "build": "next build",
     "lint": "eslint .",
     "start": "next start --hostname 127.0.0.1 -p 3002",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "postinstall": "node scripts/pdf-worker.mjs",
+    "predev": "node scripts/pdf-worker.mjs",
+    "prebuild": "node scripts/pdf-worker.mjs"
   },
   "dependencies": {
     "@fortawesome/fontawesome-svg-core": "6.4.0",
     "@fortawesome/free-solid-svg-icons": "6.4.0",
     "@fortawesome/react-fontawesome": "^3.5.0",
+    "3d-force-graph": "1.80.1",
     "clsx": "2.0.0",
     "d3-color": "3.1.0",
+    "mammoth": "1.13.0",
     "next": "16.3.0",
+    "pdfjs-dist": "6.4.299",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
@@ -24,6 +30,7 @@
     "@types/node": "20.1.0",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.4",
+    "@types/three": "0.186.0",
     "autoprefixer": "10.4.15",
     "eslint": "9.39.5",
     "eslint-config-next": "16.3.0",

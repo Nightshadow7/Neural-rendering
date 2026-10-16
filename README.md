@@ -1,37 +1,73 @@
-# El modelo por dentro
+# Visualizador local
 
-Visualización 3D de un modelo de lenguaje, explicaciones en español, inferencia local y sensores reales de CPU/GPU.
+## Requisitos
 
-## Abrir
+- Node.js 22.13 o superior (recomendado: Node.js 24) y npm.
+- Ollama instalado y abierto.
+- Modelo `deepseek-r1:7b` (descarga aproximada de 4,7 GB).
+- Chrome o Edge con WebGL2 para la vista 3D.
+- GPU NVIDIA y controlador con `nvidia-smi` para sus sensores. Sin ellos, la GPU aparece como no disponible.
 
-Ejecuta `npm run dev` y abre http://127.0.0.1:3002. La pantalla principal muestra directamente el recorrido; no hay que añadir `/llm` ni cambiar la URL del modelo.
+## Preparar
 
-Para una ejecución optimizada: `npm run build` y luego `npm start`. Ambos modos usan el puerto 3002 y escuchan solo en este equipo.
+1. Abre una terminal en esta carpeta e instala las dependencias:
+   ```powershell
+   npm install
+   ```
+2. Descarga el modelo una sola vez:
+   ```powershell
+   ollama pull deepseek-r1:7b
+   ```
+3. Mantén Ollama abierto. Si no está activo, ejecuta `ollama serve` en otra terminal.
 
-## Modelo local
+## Ejecutar
 
-Al abrir la página se busca primero un llama-server activo en los puertos 8080 y 8081. Se usa el nombre del modelo que devuelve su API. Si no está disponible, se conecta con Ollama en el puerto 11434 y carga automáticamente `deepseek-r1:7b`, con un contexto solicitado de 4096 tokens y 30 minutos de permanencia en memoria. La primera carga puede tardar.
+```powershell
+npm run dev
+```
 
-Ollama debe estar abierto o llama-server iniciado con su modelo GGUF. La aplicación no descarga modelos ni cambia la configuración de reparto CPU/GPU. Para una instalación de llama-server en otro puerto, se puede definir `LLAMA_BASE_URL` en `.env.local`; no es necesario en la configuración habitual. El navegador siempre usa las API del propio proyecto, sin habilitar CORS global.
+La terminal muestra ambas direcciones. Puedes abrirlas al mismo tiempo:
 
-## Qué se observa
+- [Visualización 3D](http://127.0.0.1:3002/): capas, explicación e inferencia local.
+- [Arañita](http://127.0.0.1:3002/arañita): documento, búsqueda de contexto y respuesta.
 
-- CPU: actividad total del equipo calculada a partir de dos muestras de los contadores del sistema.
-- GPU NVIDIA: utilización, VRAM, temperatura y potencia leídas mediante `nvidia-smi`.
-- RAM: memoria física total y usada del equipo.
-- Respuesta: texto transmitido por el modelo, primer fragmento, tokens de salida reportados por el servidor, duración y promedio total de tokens/segundo (incluye la espera inicial).
-- Escena 3D: GPT de ejemplo con unas 85 mil variables aprendidas y un recorrido por las operaciones. Sus tensores no son los de DeepSeek. El avance automático cada ocho segundos es una explicación ilustrativa, no una medición de las capas en ejecución. Los identificadores del diagrama inicial son ejemplos.
+Un solo servidor sirve las dos páginas. Detén el servidor con `Ctrl+C`. Si el puerto 3002 está ocupado, detén la ejecución anterior antes de iniciar otra.
 
-Los sensores incluyen otros programas y el navegador, no solo el modelo. No se inventan valores si un sensor falla. La salida del modelo puede conservar términos en otros idiomas aunque se le solicita responder en español.
+## Arañita
 
-Puedes detener la generación, reconectar y explorar las etapas. El recorrido detallado conserva los controles Continuar/Saltar y el movimiento de cámara. Los atajos no se activan al escribir en el formulario.
+1. Pulsa **Añadir archivo**: admite PDF, DOCX, TXT, MD, CSV, TSV, JSON, HTML, XML, LOG y código (PY, JS, TS, CSS, YAML). También puedes usar el ejemplo.
+2. Escribe una pregunta sobre el documento.
+3. Pulsa **Preguntar**. Verás la comparación de fragmentos y hasta cuatro seleccionados.
+4. Lee la respuesta y revisa las citas en el contexto. **Detener** cancela la consulta.
 
-## Archivos conservados
+La red crece al cargar el documento: cada fragmento se conecta con sus palabras principales. Las palabras compartidas unen grupos mediante física de fuerzas en 3D. La pregunta ilumina los fragmentos comparados y seleccionados; el recorrido registra sus similitudes. Arrastra para girar, usa la rueda para acercarte y pulsa un fragmento para leerlo. El chat permanece a la derecha. Sin documento también puedes preguntar al modelo.
 
-`src/llm` contiene el motor 3D y las explicaciones; `src/utils`, sus utilidades; `src/server` y `src/app/api`, la conexión local y los sensores. `public` contiene los pesos del ejemplo, WebAssembly y fuentes necesarias. Los archivos fuente de las fuentes y de WebAssembly permiten reconstruir estos recursos. Se conserva la licencia original.
+Para mantener la fluidez, la vista incorpora inicialmente hasta 120 fragmentos; la búsqueda analiza todos y añade los resultados y el fragmento que compara.
 
-Los módulos de portafolio, circuitos, compresión y fluidos, la copia duplicada del proyecto y otros archivos sin uso se retiraron de esta carpeta. Hay una copia recuperable en `../respaldo-neural-rendering-20261016-055012`.
+Límites: 20 MiB por archivo, 200 páginas por PDF, un millón de caracteres y 2000 fragmentos. Los PDF deben tener texto seleccionable; los escaneos requieren OCR previo. DOCX es compatible; el formato antiguo DOC no.
 
-## Validación
+La búsqueda compara palabras con TF-IDF y similitud de coseno; no comprende sinónimos como un buscador semántico. Solo los fragmentos seleccionados y la pregunta se envían al servidor local. El archivo no se guarda; al recargar, debes elegirlo otra vez.
 
-`npm run typecheck` comprueba los tipos y `npm run build` genera la aplicación de producción.
+Las etapas Embeddings → Atención → MLP son un esquema explicativo, no activaciones internas de DeepSeek. Los pulsos de salida siguen eventos reales del texto recibido, que pueden contener varios tokens. No se inventan pesos de atención ni FLOPs. La afinidad no indica cuánto utilizó el modelo cada fragmento. CPU y GPU muestran el uso de todo el equipo. La primera carga del modelo puede tardar.
+
+## Producción
+
+```powershell
+npm run build
+npm start
+```
+
+Abre las mismas dos direcciones. Usa este modo o desarrollo, no ambos en el mismo puerto.
+
+## Conexión
+
+Se detecta primero llama-server en los puertos 8080/8081; si no está disponible, se usa Ollama en 11434 con `deepseek-r1:7b`. No necesitas cambiar las URL del navegador. Para otro puerto de llama-server, define `LLAMA_BASE_URL` en `.env.local`.
+
+## Comprobar
+
+```powershell
+npm run typecheck
+npm run build
+```
+
+La revisión global de estilo conserva avisos del motor 3D original.
